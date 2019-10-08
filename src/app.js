@@ -20,7 +20,7 @@ app.use(cors());
 
 app.use(validateBearerToken);
 
-app.use(bookmarkRouter);
+app.use('/api/bookmarks', bookmarkRouter);
 
 app.get('/', (req, res) => {
     res.send('Hello, world!')

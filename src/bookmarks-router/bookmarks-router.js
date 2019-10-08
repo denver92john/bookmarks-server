@@ -1,9 +1,8 @@
+const path = require('path');
 const express = require('express');
-//const uuid = require('uuid/v4');
 const {isWebUri} = require('valid-url');
 const xss = require('xss');
 const logger = require('../logger');
-//const store = require('../store');
 const BookmarksService = require('./bookmarks-service');
 
 const bookmarkRouter = express.Router();
@@ -18,7 +17,7 @@ const serializeBookmark = bookmark => ({
 });
 
 bookmarkRouter
-    .route('/bookmarks')
+    .route('/')
     .get((req, res, next) => {
         BookmarksService.getAllBookmarks(req.app.get('db'))
             .then(bookmarks => {
@@ -65,7 +64,7 @@ bookmarkRouter
                 logger.info(`Bookmark with id ${bookmark.id} created`)
                 res
                     .status(201)
-                    .location(`/bookmarks/${bookmark.id}`)
+                    .location(path.posix.join(req.originalUrl + `/${bookmark.id}`))
                     .json(serializeBookmark(bookmark))
             })
             .catch(next)
@@ -89,7 +88,7 @@ bookmarkRouter
     });
 
 bookmarkRouter
-    .route('/bookmarks/:id')
+    .route('/:id')
     .all((req, res, next) => {
         const {id} = req.params;
         BookmarksService.getById(req.app.get('db'), id)
@@ -119,6 +118,45 @@ bookmarkRouter
                 res.status(204).end()
             })
             .catch(next)
-    });
+    })
+    .patch(bodyParser, (req, res, next) => {
+        const {title, url, description, rating} = req.body;
+        const articleToUpdate = {title, url, description, rating};
+
+        const numberOfValues = Object.values(articleToUpdate).filter(Boolean).length
+        if(numberOfValues === 0) {
+            return res.status(400).json({
+                error: {
+                    message: `Request body must contain either 'title', 'url', 'description', or 'rating'`
+                }
+            })
+        }
+        if(rating && (!Number.isInteger(rating) || rating < 0 || rating > 5)) {
+            logger.error(`Invalid rating '${rating}' supplied`)
+            return res.status(400).json({
+                error: {
+                    message: `'rating' must be a number between 0 and 5`
+                }
+            })
+        }
+        if(url && !isWebUri(url)) {
+            logger.error(`Invalid url '${url}' supplied`)
+            return res.status(400).json({
+                error: {
+                    message: `'url' must be a valid url`
+                }
+            })
+        }
+
+        BookmarksService.updateBookmark(
+            req.app.get('db'),
+            req.params.id,
+            articleToUpdate
+        )
+            .then(numRowsAffected => {
+                res.status(204).end()
+            })
+            .catch(next)
+    })
 
 module.exports = bookmarkRouter;
